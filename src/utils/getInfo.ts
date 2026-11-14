@@ -70,3 +70,17 @@ export function measureRefreshRate(samples: number = 60): Promise<number> {
     requestAnimationFrame(tick);
   });
 }
+
+export interface AvailableMedia {
+  camera: boolean;
+  microphone: boolean;
+}
+
+export async function getMediaDevices(): Promise<AvailableMedia> {
+  const devices = await navigator.mediaDevices.enumerateDevices()
+
+  return {
+    camera: devices.some(device => device.kind === "videoinput"),
+    microphone: devices.some(device => device.kind === "audioinput")
+  }
+}

@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
-import { BsBatteryFull, BsDisplay, BsGpuCard, BsMemory } from "react-icons/bs";
-import { IoMdFlash, IoMdFlashOff } from "react-icons/io";
+import { BsBatteryFull, BsCameraFill, BsDisplay, BsGpuCard, BsMemory } from "react-icons/bs";
+import { IoMdFlash, IoMdFlashOff, IoMdMicrophone } from "react-icons/io";
 
 import InfoCard from "../../components/InfoCard";
 import TitleBar from "../../components/TitleBar";
-
-import { DisplayContainer, PageContainer } from "./styles";
-import { getGPUInfo, measureRefreshRate } from "../../utils/getInfo";
 import ProgressBar from "../../components/ProgressBar";
+import InfoTag from "../../components/InfoTag";
+
+import { DisplayContainer, MediaContainer, PageContainer } from "./styles";
+import { getGPUInfo, getMediaDevices, measureRefreshRate } from "../../utils/getInfo";
+import { type AvailableMedia } from "../../utils/getInfo"
+import { formatEcho, formatFocusMode, formatOrientationName } from "../../utils/format";
 
 function calculateTime(b: BatteryInfo): string {
 	if(b.charging) {
@@ -21,17 +24,25 @@ function calculateTime(b: BatteryInfo): string {
 	}
 }
 
-function getOrientationName(type: OrientationType): string {
-  switch (type) {
-    case "landscape-primary":
-      return "Paisagem";
-    case "landscape-secondary":
-      return "Paisagem invertida";
-    case "portrait-primary":
-      return "Retrato";
-    case "portrait-secondary":
-      return "Retrato invertido";
-  }
+function getInfoTag(s: boolean | undefined) {
+	return (
+		<InfoTag 
+			color={s ? "var(--activeGreen)" : "var(--warningYellow)"}
+			text={s ? "Disponível" : "Indisponível"}
+		/>
+	)
+}
+
+function calcDiagnosis(values: unknown[]): number {
+  if (values.length === 0) return 100;
+
+  const defined = values.filter((v) => v !== undefined && v !== null).length;
+  return Math.round((defined / values.length) * 100);
+}
+
+interface MediaInfo {
+	label: string;
+	settings: MediaTrackSettings;
 }
 
 export function Hardware() {
@@ -39,6 +50,27 @@ export function Hardware() {
 	const [battery, setBattery] = useState<BatteryInfo>()
 	const [freeStorage, setFreeStorage] = useState<number>()
 	const [refreshRate, setRefreshRate] = useState<number>()
+	const [mediaDevices, setMediaDevices] = useState<AvailableMedia>()
+	const [camera, setCamera] = useState<MediaInfo>()
+	const [microphone, setMicrophone] = useState<MediaInfo>()
+
+	async function getMediaData(type: string) {
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia(
+				type === "camera" ? { video: true } : { audio: true }
+			);
+
+			const track = stream.getTracks()[0];
+			const settings = track.getSettings();
+			stream.getTracks().forEach((t) => t.stop());
+			console.log(settings);
+
+			(type === "camera" ? setCamera : setMicrophone)({label: track.label, settings });
+		} catch (err) {
+			// Talvez botar um aviso para o usuário em algum lugar depois, mas acho dificil dar erro
+			console.error(err)
+		}
+	}
 
 	useEffect(() => {
 		if(!navigator.getBattery) return;
@@ -74,9 +106,33 @@ export function Hardware() {
   	measureRefreshRate().then(setRefreshRate);
 	}, []);
 
+	useEffect(() => {
+		getMediaDevices().then(setMediaDevices)
+	}, [])
+
+	const diagnosisValues = [
+		gpuInfo?.gpu, gpuInfo?.api, navigator.hardwareConcurrency,
+		battery?.level, navigator.deviceMemory, freeStorage,
+
+		screen.width,screen.height,window.devicePixelRatio,
+		screen.orientation?.type, refreshRate,
+
+		camera?.label, camera?.settings.width, camera?.settings.height,
+		camera?.settings.frameRate, camera?.settings.focusMode, camera?.settings.facingMode,
+		camera?.settings.exposureMode, camera?.settings.whiteBalanceMode, camera?.settings.torch,
+
+		// Microfone 
+		microphone?.label, microphone?.settings.channelCount, microphone?.settings.sampleRate,
+		microphone?.settings.sampleSize, microphone?.settings.echoCancellation,
+		microphone?.settings.autoGainControl, microphone?.settings.noiseSuppression,
+		microphone?.settings.latency, microphone?.settings.voiceIsolation,
+	]
+
 	return (
 		<PageContainer>
-			<TitleBar diagnosis={100} subtitle="RECURSOS DETECTADOS" title="Informações de Hardware"/>
+			<TitleBar diagnosis={calcDiagnosis(diagnosisValues)} 
+				subtitle="RECURSOS DETECTADOS" title="Informações de Hardware"
+			/>
 			<div className="infoCardContainer">
 				<InfoCard Icon={BsGpuCard} title="Placa Gráfica / Processador">
 					<div className="simpleInfoContainer">
@@ -139,7 +195,7 @@ export function Hardware() {
 						<div className="screenData">
 							<span>
 								<h5>ORIENTAÇÃO</h5>
-								<p>{getOrientationName(screen.orientation.type)}</p>
+								<p>{formatOrientationName(screen.orientation.type)}</p>
 							</span>
 							<span>
 								<h5>TAXA DE ATUALIZAÇÃO</h5>
@@ -147,6 +203,114 @@ export function Hardware() {
 							</span>
 						</div>
 					</DisplayContainer>
+				</InfoCard>
+			</div>
+			<div className="infoCardContainer">
+				<InfoCard Icon={BsCameraFill} title="Câmera" InfoTag={getInfoTag(mediaDevices?.camera)}>
+					{!camera ? (
+						<div className="buttonContainer">
+							<button className="permissionButton" onClick={() => getMediaData("camera")}>
+								Solicitar Permissão
+							</button>
+						</div>
+					) : (
+						<MediaContainer>
+							<span>
+								<h1>Nome</h1>
+								<p>{camera.label}</p>
+							</span>
+							<span>
+								<h1>Resolução</h1>
+								<p>
+									{camera.settings.width ?? "??"} {" x "}
+									{camera.settings.height ?? "??"}
+								</p>
+							</span>
+							<span>
+								<h1>Taxa de Quadros</h1>
+								<p>{camera.settings.frameRate ?? "??"}Fps</p>
+							</span>
+							<span>
+								<h1>Modo de Foco</h1>
+								<p>{formatFocusMode(camera.settings.focusMode)}</p>
+							</span>
+							<span>
+								<h1>Posição</h1>
+								<p>{formatFocusMode(camera.settings.facingMode)}</p>
+							</span>
+							<span>
+								<h1>Modo de Exposição</h1>
+								<p>{formatFocusMode(camera.settings.exposureMode)}</p>
+							</span>
+							<span>
+								<h1>Balanço de Branco</h1>
+								<p>{formatFocusMode(camera.settings.whiteBalanceMode)}</p>
+							</span>
+							<span>
+								<h1>Possui Lanterna</h1>
+								<p>{camera.settings.torch == undefined ? "Não" : "Sim"}</p>
+							</span>
+						</MediaContainer>
+					)}
+				</InfoCard>
+				<InfoCard 
+					Icon={IoMdMicrophone} title="Microfone" 
+					InfoTag={getInfoTag(mediaDevices?.microphone)}
+				>
+					{!microphone ? (
+						<div className="buttonContainer">
+							<button className="permissionButton" onClick={() => getMediaData("audio")}>
+								Solicitar Permissão
+							</button>
+						</div>
+					) : (
+						<MediaContainer>
+							<span>
+								<h1>Nome</h1>
+								<p>{microphone.label}</p>
+							</span>
+							<span>
+								<h1>Tipo</h1>
+								<p>
+									{microphone.settings.channelCount ? 
+									(microphone.settings.channelCount == 1 ? "Mono" : "Estereo") : "Desconhecido"}
+								</p>
+							</span>
+							<span>
+								<h1>Amostras</h1>
+								<p>
+									{microphone.settings.sampleRate ?? "?? "}Hz {" // "}
+									{microphone.settings.sampleSize ?? "?? "}Bits
+								</p>
+							</span>
+							<span>
+								<h1>Cancelamento de Eco</h1>
+								<p>{formatEcho(microphone.settings.echoCancellation)}</p>
+							</span>
+							<span>
+								<h1>Ganho Automático</h1>
+								<p>{microphone.settings.autoGainControl != undefined ? 
+									(microphone.settings.autoGainControl ? "Sim" : "Não") : "Desconhecido"}
+								</p>
+							</span>
+							<span>
+								<h1>Cancelamento De Ruído</h1>
+								<p>{microphone.settings.noiseSuppression != undefined ? 
+									(microphone.settings.noiseSuppression ? "Sim" : "Não") : "Desconhecido"}
+								</p>
+							</span>
+							<span>
+								<h1>Latência</h1>
+								<p>{microphone.settings.latency ?? "Desconhecido"}</p>
+							</span>
+							<span>
+								<h1>Isolamento de Voz</h1>
+								<p>{microphone.settings.voiceIsolation != undefined ? 
+									(microphone.settings.voiceIsolation ? "Sim" : "Não") : "Desconhecido"}
+								</p>
+							</span>
+						</MediaContainer>
+					)}
 				</InfoCard>
 			</div>
 		</PageContainer>

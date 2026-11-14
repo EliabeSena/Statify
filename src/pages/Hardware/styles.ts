@@ -18,6 +18,27 @@ export const PageContainer = styled.div`
     display: flex;
     flex-direction: column;
   }
+
+  .buttonContainer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .permissionButton {
+    &:hover {
+      transform: scale(1.05);
+    }
+    transition: 0.2s;
+    cursor: pointer;
+    width: 200px;
+    height: 36px;
+    background-color: CanvasText;
+    border-radius: 12px;
+    color: Canvas;
+    font-weight: 400;
+    border: 0;
+  }
 `
 
 export const DisplayContainer = styled.div`
@@ -45,5 +66,18 @@ export const DisplayContainer = styled.div`
 
   p {
     font-size: 24px;
+  }
+`
+export const MediaContainer = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  row-gap: 1rem;
+
+  h1 {
+    font-size: 16px;
+    color: var(--accentColor);
+    font-weight: 400;
+    text-transform: uppercase;
   }
 `
