@@ -2,6 +2,9 @@ import styled from "styled-components";
 
 export const Container = styled.aside<{ $open: boolean }>`
   height: 100vh;
+  position: sticky;
+  top: 0;
+  left: 0;
   background: var(--backgroundLight);
   display: flex;
   flex-direction: column;
